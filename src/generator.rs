@@ -35,6 +35,7 @@ impl Music {
 		}
 
 		code += &format!("
+		ld a, {}; theme
 		call {} ; init
 
 loop
@@ -49,6 +50,7 @@ loop
 
 		jp loop
 		",
+		header.theme_code(self.selected_theme()),
 		header.init_call_address(),
 		header.play_call_address()
 		);

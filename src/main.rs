@@ -23,7 +23,7 @@ fn main() {
 with <command> having such values:
  - random: play a random music
  - list: list all musics keys. Take an optional argument that corresponds to the author.
- - <key> plays the music with key <key>. If it does not exists, search a music of author <key>
+ - <key> plays the music with key <key>. Music key can be postfixed by :<theme> to choose a theme different than the first one. If it does not exists, search a music of author <key>.
     ", args[0]);
     let cpcip = &args[1];
     let cmd = &args[2];
@@ -37,7 +37,7 @@ with <command> having such values:
         "list" => {
 
             let repr = mix.keys()
-                .map(|k| (k, mix.music(k).unwrap()))
+                .map(|k| (k, mix.music(k, &mut rand::thread_rng()).unwrap()))
                 .map(|(k, m) | (
                     k,
                     m.title().unwrap_or("".to_owned()), 
@@ -68,7 +68,7 @@ with <command> having such values:
             );
             return;
         }
-        any => mix.music(any)
+        any => mix.music(any, &mut rng)
     };
 
     let music = match music {
@@ -78,7 +78,7 @@ with <command> having such values:
             
 
             if let Some(music) = mix.keys()
-                .map(|k| mix.music(k).unwrap())
+                .map(|k| mix.music(k, &mut rand::thread_rng()).unwrap())
                 .filter(|m| {
                     m.author().unwrap_or("??".to_owned()).to_lowercase() == args[2]
                 })

@@ -1,7 +1,7 @@
 use rand::seq::IteratorRandom;
 use rand::rngs::ThreadRng;
 use itertools::Itertools;
-
+use rand::Rng;
 pub use std::convert::TryFrom;
 
 include!(concat!(env!("OUT_DIR"), "/", "db.rs")); 
@@ -64,38 +64,46 @@ impl MusicHeader {
 	pub fn len() -> usize {
 		35 as usize
 	}
-
+	
 	pub fn need_system(&self)  -> bool {
 		self.need_system != 0
 	}
-
+	
 	pub fn relative_music_info(&self) -> usize {
 		(self.music_info - self.music_begin) as usize
 	}
-
+	
 	pub fn load_adress(&self) -> u16 {
 		self.music_begin
 	}
-
+	
 	pub fn init_call_address(&self) -> u16 {
 		self.init_music
 	}
-
+	
 	pub fn play_call_address(&self) -> u16 {
 		self.music_play
 	}
-
+	
+	pub fn nb_themes(&self) -> u8 {
+		self.last_theme - self.first_theme + 1
+	}
+	
+	pub fn theme_code(&self, nb: u8) -> u8 {
+		self.first_theme + nb
+	}
+	
 }
 
 impl TryFrom<&[u8]> for MusicHeader {
 	type Error = String;
-
+	
 	fn try_from(stream: &[u8]) -> Result<Self, Self::Error> {
-
+		
 		if stream.len() != Self::len() {
 			return Err("Wrong size".to_owned());
 		}
-
+		
 		for (idx, chr) in "Megachur".chars().enumerate() {
 			if stream[25 + idx] as char != chr {
 				return Err(
@@ -108,15 +116,15 @@ impl TryFrom<&[u8]> for MusicHeader {
 				);
 			}
 		}
-
+		
 		let byte = |idx: usize| {
 			stream[idx]
 		};
-
+		
 		let word = |idx: usize| {
 			stream[idx] as u16 + 256*(stream[idx+1] as u16)
 		};
-
+		
 		Ok(Self {
 			music_begin: word(0),
 			music_adr: word(2),
@@ -135,7 +143,7 @@ impl TryFrom<&[u8]> for MusicHeader {
 			music_date_rip_year: byte(23),
 			need_system: byte(24),
 			eof_length: word(33),
-
+			
 		})
 	}
 }
@@ -143,21 +151,22 @@ impl TryFrom<&[u8]> for MusicHeader {
 #[derive(Debug)]
 pub struct Music {
 	name: String,
-	data: &'static [u8]
+	data: &'static [u8],
+	selected_theme: u8
 }
 
 
 impl Music {
-
-
+	
+	
 	pub fn header(&self) -> Result<MusicHeader, String> {
 		MusicHeader::try_from(&self.data[..MusicHeader::len()])
 	}
-
+	
 	pub fn info(&self) -> Result<String, String> {
 		let header = self.header()?;
 		let start = &self.data[header.relative_music_info()..];
-
+		
 		let mut info = String::new();
 		let mut first = true;
 		for chr in start.iter() {
@@ -174,10 +183,10 @@ impl Music {
 				info += &(*chr as char).to_string();
 			}
 		}
-
+		
 		Ok(info)
 	}
-
+	
 	// panic if info not properly set
 	pub fn author(&self) -> Result<String, String> {
 		let infos = self.info()?;
@@ -186,7 +195,7 @@ impl Music {
 		let author = bloc.split(")").next().unwrap();
 		Ok(author.to_owned())
 	}
-
+	
 	// panic if info not properly set
 	pub fn title(&self) -> Result<String, String> {
 		let infos = self.info()?;
@@ -194,11 +203,29 @@ impl Music {
 		let title = line.split('(').next().unwrap();
 		Ok(title.to_owned())
 	}
-
+	
 	pub fn content(&self) -> &[u8] {
 		&self.data
 	}
+	
+	pub fn select_theme(&mut self, theme: u8) {
+		self.selected_theme = theme
+	}
+	
+	pub fn selected_theme(&self) -> u8 {
+		self.selected_theme
+	}
+	
+	pub fn is_theme_valid(&self) -> bool {
+		self.selected_theme() < self.header().unwrap().nb_themes()
+	}
 
+	pub fn select_random_theme(&mut self, rng: &mut ThreadRng) {
+		self.select_theme(
+			rng.gen::<u8>() % self.header().unwrap().nb_themes()
+		)
+	}
+	
 }
 
 
@@ -209,17 +236,55 @@ impl CpcMix {
 	pub fn new() -> Self {
 		Self{}
 	}
-
+	
 	pub fn keys(&self) -> impl Iterator<Item=&'static &'static str> {
 		StaticMap::keys().iter()
 	}
-
-	pub fn music(&self, key: &str) -> Option<Music> {
+	
+	/// Select the music of interest in the database:
+	/// - `<music>` Select theme 0 of music <key>
+	/// - `<music>:<theme>` Select theme <theme> of music <key>
+	/// - `<music>:?` Select a random theme for music <key>
+	///
+	/// Return None if:
+	/// - music is not found
+	/// - music is found but theme does not exists
+	pub fn music(&self, key: &str, rng: &mut ThreadRng) -> Option<Music> {
+		
+		let (key, theme) = if key.contains(":") {
+			let words = key.split(':').collect::<Vec<&str>>();
+			(words[0], words[1])
+		}
+		else {
+			(key, "0")
+		};
+		
 		StaticMap::get(key)
-			.and_then(|data| Some(Music{name: key.to_owned(), data}))
+		.and_then(|data| Some(Music{
+			name: key.to_owned(), 
+			data, 
+			selected_theme: 0
+		}))
+		.and_then(|mut m| {
+			let theme = if theme == "?" {
+				m.select_random_theme(rng);
+			}
+			else {
+				let theme = u8::from_str_radix(theme, 10).unwrap();
+				m.select_theme(theme);
+			};
+			if m.is_theme_valid() {
+				Some(m)
+			}
+			else {
+				None
+			}
+		})
 	}
-
+	
 	pub fn random(&self, rng: &mut ThreadRng) -> Music {
-		self.music(self.keys().choose(rng).unwrap()).unwrap()
+		let mut music = self.music(self.keys().choose(rng).unwrap(), rng).unwrap();
+		music.select_random_theme(rng);
+		music
 	}
 }
