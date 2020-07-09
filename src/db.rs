@@ -1,7 +1,8 @@
 use rand::seq::IteratorRandom;
 use rand::rngs::ThreadRng;
 use itertools::Itertools;
-use rand::Rng;
+use rand::random;
+
 pub use std::convert::TryFrom;
 
 include!(concat!(env!("OUT_DIR"), "/", "db.rs")); 
@@ -217,12 +218,15 @@ impl Music {
 	}
 	
 	pub fn is_theme_valid(&self) -> bool {
-		self.selected_theme() < self.header().unwrap().nb_themes()
+		match self.header() {
+			Ok(h) => self.selected_theme() < h.nb_themes(),
+			Err(_) => true
+		}
 	}
 
-	pub fn select_random_theme(&mut self, rng: &mut ThreadRng) {
+	pub fn select_random_theme(&mut self) {
 		self.select_theme(
-			rng.gen::<u8>() % self.header().unwrap().nb_themes()
+			random::<u8>() % self.header().unwrap().nb_themes()
 		)
 	}
 	
@@ -249,7 +253,7 @@ impl CpcMix {
 	/// Return None if:
 	/// - music is not found
 	/// - music is found but theme does not exists
-	pub fn music(&self, key: &str, rng: &mut ThreadRng) -> Option<Music> {
+	pub fn music(&self, key: &str) -> Option<Music> {
 		
 		let (key, theme) = if key.contains(":") {
 			let words = key.split(':').collect::<Vec<&str>>();
@@ -267,7 +271,7 @@ impl CpcMix {
 		}))
 		.and_then(|mut m| {
 			let theme = if theme == "?" {
-				m.select_random_theme(rng);
+				m.select_random_theme();
 			}
 			else {
 				let theme = u8::from_str_radix(theme, 10).unwrap();
@@ -282,9 +286,9 @@ impl CpcMix {
 		})
 	}
 	
-	pub fn random(&self, rng: &mut ThreadRng) -> Music {
-		let mut music = self.music(self.keys().choose(rng).unwrap(), rng).unwrap();
-		music.select_random_theme(rng);
+	pub fn random(&self) -> Music {
+		let mut music = self.music(self.keys().choose(&mut rand::thread_rng()).unwrap()).unwrap();
+		music.select_random_theme();
 		music
 	}
 }

@@ -8,7 +8,6 @@ use std::thread;
 use itertools::Itertools;
 use cpcmix;
 
-
 /// Dummy player
 /// M4 must have a directory /tmp
 /// cpcmix <cpcip> <command>
@@ -37,7 +36,7 @@ with <command> having such values:
         "list" => {
 
             let repr = mix.keys()
-                .map(|k| (k, mix.music(k, &mut rand::thread_rng()).unwrap()))
+                .map(|k| (k, mix.music(k).unwrap()))
                 .map(|(k, m) | (
                     k,
                     m.title().unwrap_or("".to_owned()), 
@@ -68,7 +67,7 @@ with <command> having such values:
             );
             return;
         }
-        any => mix.music(any, &mut rng)
+        any => mix.music(any)
     };
 
     let music = match music {
@@ -78,7 +77,7 @@ with <command> having such values:
             
 
             if let Some(music) = mix.keys()
-                .map(|k| mix.music(k, &mut rand::thread_rng()).unwrap())
+                .map(|k| mix.music(k).unwrap())
                 .filter(|m| {
                     m.author().unwrap_or("??".to_owned()).to_lowercase() == args[2]
                 })
