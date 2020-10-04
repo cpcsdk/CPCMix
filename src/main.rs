@@ -32,7 +32,7 @@ with <command> having such values:
     
     //let music =  mix.random(&mut rng);
     let music = match cmd.as_ref() {
-        "random" => Some(mix.random(&mut rng)),
+        "random" => Some(mix.random()),
         "list" => {
 
             let repr = mix.keys()
